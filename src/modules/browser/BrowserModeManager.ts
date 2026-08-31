@@ -4,7 +4,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import {spawn, type ChildProcess} from 'node:child_process';
-import {existsSync} from 'node:fs';
+import {existsSync, mkdirSync, rmSync} from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
 
 import type {Browser, Page} from 'puppeteer-core';
 import puppeteer from 'puppeteer-core';
@@ -24,6 +26,9 @@ export interface BrowserModeConfig {
   remoteDebuggingPort?: number;
   waitForBrowserTimeoutMs?: number;
   waitForBrowserPollMs?: number;
+  /** 自启动浏览器的独立 user-data-dir（Chrome 136+ 无独立目录会静默忽略
+   *  --remote-debugging-port；缺省用 os.tmpdir()/jsreverser-mcp-profile-<port>） */
+  userDataDir?: string;
 }
 
 interface SessionData {
@@ -58,6 +63,10 @@ export class BrowserModeManager {
       remoteDebuggingPort: port,
       waitForBrowserTimeoutMs: config.waitForBrowserTimeoutMs ?? 5000,
       waitForBrowserPollMs: config.waitForBrowserPollMs ?? 500,
+      // 自启动独立 profile（Chrome 136+ 必需）；缺省 os.tmpdir()/jsreverser-mcp-profile-<port>
+      userDataDir:
+        config.userDataDir ??
+        path.join(os.tmpdir(), `jsreverser-mcp-profile-${port}`),
     };
   }
 
@@ -87,9 +96,16 @@ export class BrowserModeManager {
     const selectedBrowser = browsers[0];
     logger.info(`🚀 Launching browser: ${selectedBrowser.path}`);
     logger.info(`🔌 Remote debugging port: ${this.config.remoteDebuggingPort}`);
+    logger.info(`📁 User data dir: ${this.config.userDataDir}`);
+
+    // Chrome 136+ 必须独立 user-data-dir 才会开 --remote-debugging-port，
+    // 否则端口被静默忽略 → puppeteer.connect 永远失败（只能手动启浏览器）。
+    // 确保目录存在（多次 launch 复用同目录；残留锁由 waitForBrowser 超时后再建）。
+    mkdirSync(this.config.userDataDir, {recursive: true});
 
     const args = [
       `--remote-debugging-port=${this.config.remoteDebuggingPort}`,
+      `--user-data-dir=${this.config.userDataDir}`,
       '--no-first-run',
       '--no-default-browser-check',
     ];
@@ -386,19 +402,47 @@ export class BrowserModeManager {
       this.currentPage = null;
     }
 
-    // 如果是自动启动的浏览器，终止进程
+    // 如果是自动启动的浏览器，终止进程（Windows 用 taskkill /T /F 杀整棵进程树，
+    // SIGTERM 只杀主进程——渲染器子进程会残留 + 锁住 profile 目录）
+    const wasAutoLaunched = this.autoLaunched;
     if (
-      this.autoLaunched &&
+      wasAutoLaunched &&
       this.browserProcess &&
       !this.browserProcess.killed
     ) {
       try {
-        this.browserProcess.kill('SIGTERM');
+        if (process.platform === 'win32') {
+          const {execFileSync} = await import('node:child_process');
+          execFileSync(
+            'taskkill', ['/PID', String(this.browserProcess.pid), '/T', '/F'],
+            {stdio: 'ignore', windowsHide: true},
+          );
+        } else {
+          this.browserProcess.kill('SIGTERM');
+        }
         this.browserProcess = null;
         this.autoLaunched = false;
-        logger.info('🔒 Auto-launched browser process terminated.');
+        logger.info('🔒 Auto-launched browser process tree terminated.');
       } catch (error) {
         logger.warn('Failed to terminate browser process', error);
+      }
+    }
+
+    // 自启动浏览器结束后清理独立 profile（仅 autoLaunch 的浏览器清理，
+    // 外部浏览器 profile 由外部管理）。taskkill /T /F 是同步的 → 直接删。
+    if (wasAutoLaunched && this.config.userDataDir) {
+      try {
+        // Windows taskkill /F 已强杀整树，等几个 tick 让文件句柄释放
+        setTimeout(() => {
+          try {
+            rmSync(this.config.userDataDir, {recursive: true, force: true});
+            logger.info('🧹 Auto-launch user-data-dir cleaned.');
+          } catch (error) {
+            logger.warn('Failed to clean user-data-dir', error);
+          }
+        }, 300);
+      } catch (error) {
+        logger.warn('Failed to schedule user-data-dir cleanup', error);
       }
     }
   }
