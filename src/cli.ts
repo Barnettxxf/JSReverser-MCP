@@ -393,13 +393,13 @@ export const cliOptions = {
   },
   toolTimeoutMs: {
     type: 'number',
-    default: 120000,
+    default: 300000,
     description:
       'Per-tool execution timeout in milliseconds (0 = no timeout). ' +
       'ToolExecutionScheduler.withTimeout exists but the main dispatcher never passed ' +
       'a value, so a hanging CDP/browser tool (e.g. search_in_sources after heavy ' +
       'evaluate_script sessions) could block the whole session forever (2026-09-01). ' +
-      'Default 120000 turns pathological hangs into visible errors the agent can ' +
+      'Default 300000 turns pathological hangs into visible errors the agent can ' +
       'recover from; raise it for legitimately long tools.',
   },
   channel: {
