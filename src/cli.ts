@@ -104,10 +104,10 @@ export const cliOptions = {
   },
   toolProfile: {
     type: 'string',
-    choices: ['kernel', 'compact', 'full'] as const,
+    choices: ['kernel', 'compact', 'research', 'full'] as const,
     default: 'kernel',
     description:
-      'Choose which MCP tools are exposed at startup. kernel keeps automated reverse workflows visible; compact adds broader workflow controls; full exposes every low-level debugging tool.',
+      'Choose which MCP tools are exposed at startup. kernel keeps automated reverse workflows visible; compact adds broader workflow controls; research exposes the JS-reverse deep-dive set (observed agent tool usage, no debuggers/deobfuscators/WS deep analysis); full exposes every low-level debugging tool.',
   },
   traceOutput: {
     type: 'string',
