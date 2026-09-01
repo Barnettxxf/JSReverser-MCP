@@ -140,8 +140,10 @@ export const RESEARCH_TOOL_NAMES = new Set([
   'list_scripts',
   'get_script_source',
   'find_in_script',
-  'search_in_sources',
-  'search_in_scripts',
+  // 2026-09-02：search_in_sources/search_in_scripts 从 research 档移除——
+  // 两者逐脚本全量拉源码（遇多 MB minified chunk 必超时，goldset r3/r4/r5 反复
+  // 300s 超时实证）。替代：list_scripts 定脚本范围 → get_script_source 读源码 →
+  // find_in_script 定位（NOTES 静态定位模块实证：优先 find_in_script）。
   'get_dom_structure',
   'query_dom',
   // 导航 / 触真交互
