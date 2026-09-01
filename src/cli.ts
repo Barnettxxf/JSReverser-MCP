@@ -391,6 +391,17 @@ export const cliOptions = {
       'If specified, creates a temporary user-data-dir that is automatically cleaned up after the browser is closed.',
     default: false,
   },
+  toolTimeoutMs: {
+    type: 'number',
+    default: 120000,
+    description:
+      'Per-tool execution timeout in milliseconds (0 = no timeout). ' +
+      'ToolExecutionScheduler.withTimeout exists but the main dispatcher never passed ' +
+      'a value, so a hanging CDP/browser tool (e.g. search_in_sources after heavy ' +
+      'evaluate_script sessions) could block the whole session forever (2026-09-01). ' +
+      'Default 120000 turns pathological hangs into visible errors the agent can ' +
+      'recover from; raise it for legitimately long tools.',
+  },
   channel: {
     type: 'string',
     description:
